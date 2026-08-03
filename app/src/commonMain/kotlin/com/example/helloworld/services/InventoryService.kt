@@ -15,12 +15,15 @@ class InventoryService(
     private val merchantId: String,
     private val apiToken: String
 ) {
+    private val jsonDecoder = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+        isLenient = true
+    }
+
     private val client = HttpClient {
         install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                coerceInputValues = true
-            })
+            json(jsonDecoder)
         }
     }
 
@@ -28,7 +31,7 @@ class InventoryService(
         val targetPath = "v3/merchants/$merchantId/items"
         val urlsToTry = listOf(
             "/api/clover/$targetPath?access_token=$apiToken",
-            "https://api.allorigins.win/raw?url=https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken",
+            "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken",
             "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
         )
 
@@ -36,17 +39,20 @@ class InventoryService(
             try {
                 val response = client.get(url)
                 if (response.status == HttpStatusCode.OK) {
-                    val itemResponse: CloverItemResponse = response.body()
-                    val items = itemResponse.elements.map {
-                        FlashItem(
-                            id = it.id ?: "",
-                            name = it.name ?: "Unknown Item",
-                            price = it.price ?: 0L
-                        )
-                    }
-                    if (items.isNotEmpty()) {
-                        println("Successfully loaded ${items.size} items from $url")
-                        return items
+                    val rawBody = response.bodyAsText()
+                    if (rawBody.trim().startsWith("{")) {
+                        val itemResponse: CloverItemResponse = jsonDecoder.decodeFromString(rawBody)
+                        val items = itemResponse.elements.map {
+                            FlashItem(
+                                id = it.id ?: "",
+                                name = it.name ?: "Unknown Item",
+                                price = it.price ?: 0L
+                            )
+                        }
+                        if (items.isNotEmpty()) {
+                            println("Successfully loaded ${items.size} items from $url")
+                            return items
+                        }
                     }
                 }
             } catch (t: Throwable) {
@@ -54,7 +60,7 @@ class InventoryService(
             }
         }
 
-        println("Clover API unreachable. Loading store inventory.")
+        println("Clover API unreachable. Serving store inventory.")
         return getDemoItems()
     }
 
