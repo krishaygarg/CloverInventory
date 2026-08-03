@@ -70,7 +70,7 @@ class AIService(private var apiKey: String = Constants.GEMINI_API_KEY) {
     private suspend fun callGeminiApi(prompt: String): String {
         val cleanKey = apiKey.trim()
         if (!isAiReady) {
-            val error = "Gemini API key is missing. Set GEMINI_API_KEY in Constants.kt or click SET GEMINI API KEY."
+            val error = "Gemini API key is missing. Set GEMINI_API_KEY in Constants.kt or click ENTER GEMINI API KEY."
             apiError = error
             throw IllegalStateException(error)
         }
@@ -86,9 +86,15 @@ class AIService(private var apiKey: String = Constants.GEMINI_API_KEY) {
         )
 
         var errorsSummary = mutableListOf<String>()
+        val isApiKey = cleanKey.startsWith("AIzaSy")
 
         for (model in modelsToTry) {
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$cleanKey"
+            val url = if (isApiKey) {
+                "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$cleanKey"
+            } else {
+                "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent"
+            }
+
             var retryCount = 0
             val maxRetries = 3
 
@@ -96,6 +102,9 @@ class AIService(private var apiKey: String = Constants.GEMINI_API_KEY) {
                 try {
                     val response = client.post(url) {
                         contentType(ContentType.Application.Json)
+                        if (!isApiKey) {
+                            header("Authorization", "Bearer $cleanKey")
+                        }
                         setBody(request)
                     }
 

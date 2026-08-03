@@ -26,17 +26,15 @@ class InventoryService(
 
     suspend fun getInventory(): List<FlashItem> {
         val targetPath = "v3/merchants/$merchantId/items"
-        val directUrl = "https://apisandbox.dev.clover.com/$targetPath"
-        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath"
+        val queryTokenUrl = "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
+        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
 
-        val urlsToTry = listOf(directUrl, proxyUrl)
+        val urlsToTry = listOf(queryTokenUrl, proxyUrl)
 
         for (url in urlsToTry) {
             try {
-                val response = client.get(url) {
-                    header("Authorization", "Bearer $apiToken")
-                    header(HttpHeaders.Accept, "application/json")
-                }
+                // Simple GET request with access_token query param (no custom headers = no preflight OPTIONS block)
+                val response = client.get(url)
 
                 if (response.status == HttpStatusCode.OK) {
                     val itemResponse: CloverItemResponse = response.body()
@@ -55,26 +53,25 @@ class InventoryService(
                     println("Clover API ($url) status: ${response.status.value}")
                 }
             } catch (t: Throwable) {
-                println("Clover API ($url) CORS/Fetch Exception: ${t.message}")
+                println("Clover API ($url) CORS Exception: ${t.message}")
             }
         }
 
-        println("Clover API unreachable due to CORS/Network. Loading store inventory.")
+        println("Clover API unreachable. Loading store inventory.")
         return getDemoItems()
     }
 
     suspend fun addItem(name: String, priceCents: Long): Boolean {
         val targetPath = "v3/merchants/$merchantId/items"
-        val directUrl = "https://apisandbox.dev.clover.com/$targetPath"
-        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath"
+        val queryUrl = "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
+        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
 
         val request = com.example.helloworld.models.CloverAddItemRequest(name, priceCents)
 
-        for (url in listOf(directUrl, proxyUrl)) {
+        for (url in listOf(queryUrl, proxyUrl)) {
             try {
                 val response = client.post(url) {
-                    header("Authorization", "Bearer $apiToken")
-                    header(HttpHeaders.ContentType, ContentType.Application.Json)
+                    contentType(ContentType.Application.Json)
                     setBody(request)
                 }
 
@@ -91,14 +88,12 @@ class InventoryService(
 
     suspend fun deleteItem(itemId: String): Boolean {
         val targetPath = "v3/merchants/$merchantId/items/$itemId"
-        val directUrl = "https://apisandbox.dev.clover.com/$targetPath"
-        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath"
+        val queryUrl = "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
+        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
 
-        for (url in listOf(directUrl, proxyUrl)) {
+        for (url in listOf(queryUrl, proxyUrl)) {
             try {
-                val response = client.delete(url) {
-                    header("Authorization", "Bearer $apiToken")
-                }
+                val response = client.delete(url)
                 if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.NoContent) {
                     return true
                 }
