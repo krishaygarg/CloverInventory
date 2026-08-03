@@ -26,16 +26,15 @@ class InventoryService(
 
     suspend fun getInventory(): List<FlashItem> {
         val targetPath = "v3/merchants/$merchantId/items"
-        val queryTokenUrl = "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
-        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
-
-        val urlsToTry = listOf(queryTokenUrl, proxyUrl)
+        val urlsToTry = listOf(
+            "/api/clover/$targetPath?access_token=$apiToken",
+            "https://api.allorigins.win/raw?url=https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken",
+            "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
+        )
 
         for (url in urlsToTry) {
             try {
-                // Simple GET request with access_token query param (no custom headers = no preflight OPTIONS block)
                 val response = client.get(url)
-
                 if (response.status == HttpStatusCode.OK) {
                     val itemResponse: CloverItemResponse = response.body()
                     val items = itemResponse.elements.map {
@@ -46,14 +45,12 @@ class InventoryService(
                         )
                     }
                     if (items.isNotEmpty()) {
-                        println("Successfully fetched ${items.size} items from Clover API ($url)")
+                        println("Successfully loaded ${items.size} items from $url")
                         return items
                     }
-                } else {
-                    println("Clover API ($url) status: ${response.status.value}")
                 }
             } catch (t: Throwable) {
-                println("Clover API ($url) CORS Exception: ${t.message}")
+                println("Clover API ($url) error: ${t.message}")
             }
         }
 
@@ -63,12 +60,13 @@ class InventoryService(
 
     suspend fun addItem(name: String, priceCents: Long): Boolean {
         val targetPath = "v3/merchants/$merchantId/items"
-        val queryUrl = "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
-        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
-
         val request = com.example.helloworld.models.CloverAddItemRequest(name, priceCents)
+        val urlsToTry = listOf(
+            "/api/clover/$targetPath?access_token=$apiToken",
+            "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
+        )
 
-        for (url in listOf(queryUrl, proxyUrl)) {
+        for (url in urlsToTry) {
             try {
                 val response = client.post(url) {
                     contentType(ContentType.Application.Json)
@@ -76,11 +74,10 @@ class InventoryService(
                 }
 
                 if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.Created) {
-                    println("Successfully added item via $url")
                     return true
                 }
             } catch (t: Throwable) {
-                println("AddItem CORS Exception for $url: ${t.message}")
+                println("AddItem Exception for $url: ${t.message}")
             }
         }
         return false
@@ -88,17 +85,19 @@ class InventoryService(
 
     suspend fun deleteItem(itemId: String): Boolean {
         val targetPath = "v3/merchants/$merchantId/items/$itemId"
-        val queryUrl = "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
-        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
+        val urlsToTry = listOf(
+            "/api/clover/$targetPath?access_token=$apiToken",
+            "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
+        )
 
-        for (url in listOf(queryUrl, proxyUrl)) {
+        for (url in urlsToTry) {
             try {
                 val response = client.delete(url)
                 if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.NoContent) {
                     return true
                 }
             } catch (t: Throwable) {
-                println("DeleteItem CORS Exception for $url: ${t.message}")
+                println("DeleteItem Exception for $url: ${t.message}")
             }
         }
         return false

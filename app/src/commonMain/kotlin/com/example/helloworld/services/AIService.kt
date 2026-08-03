@@ -134,9 +134,13 @@ class AIService(private var apiKey: String = Constants.GEMINI_API_KEY) {
                         }
                     } else {
                         val errBody = response.bodyAsText()
-                        val httpErr = "Gemini ($model) HTTP ${response.status.value}: $errBody"
-                        println(httpErr)
-                        errorsSummary.add(httpErr)
+                        val formattedErr = if (errBody.contains("Expected OAuth 2 access token") || response.status.value == 400 || response.status.value == 401) {
+                            "Invalid Gemini API Key format ('${cleanKey.take(6)}...'). Google AI Studio Gemini API keys start with 'AIzaSy...'. Please obtain a key from https://aistudio.google.com/app/apikey"
+                        } else {
+                            "Gemini ($model) HTTP ${response.status.value}: $errBody"
+                        }
+                        println(formattedErr)
+                        errorsSummary.add(formattedErr)
                         break
                     }
                 } catch (e: Exception) {
