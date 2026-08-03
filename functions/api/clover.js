@@ -15,9 +15,13 @@ export async function onRequest(context) {
   }
 
   try {
+    // Forward all headers from the original request, including Authorization
+    const headers = new Headers(context.request.headers);
+    headers.set("Accept", "application/json");
+
     const response = await fetch(targetUrl, {
       method: context.request.method,
-      headers: context.request.headers,
+      headers: headers,
       body: context.request.method !== "GET" && context.request.method !== "HEAD" ? context.request.body : null,
     });
 

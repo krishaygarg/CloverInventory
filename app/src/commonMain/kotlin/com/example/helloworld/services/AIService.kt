@@ -36,7 +36,10 @@ fun formatPriceHelper(cents: Long): String {
  * Uses Google Gemini 3.1 Flash Lite with automatic 429 rate limit retries.
  * ZERO fallbacks - raw errors are captured and exposed for debugging.
  */
-class AIService(private var apiKey: String = Constants.GEMINI_API_KEY) {
+class AIService(
+    private var apiKey: String = Constants.GEMINI_API_KEY,
+    private var apiKey2: String = Constants.GEMINI_API_KEY_2
+) {
     private val descriptionCache = mutableMapOf<String, String>()
 
     private val json = Json {
@@ -67,17 +70,16 @@ class AIService(private var apiKey: String = Constants.GEMINI_API_KEY) {
         return match?.groupValues?.get(1)?.toIntOrNull()
     }
 
-private data class AuthConfig(val name: String, val urlTemplate: String, val useBearer: Boolean)
+private data class AuthConfig(val name: String, val key: String, val urlTemplate: String, val useBearer: Boolean)
 
     private suspend fun callGeminiApi(prompt: String): String {
-        val cleanKey = apiKey.trim()
         if (!isAiReady) {
             val error = "Gemini API key is missing. Set GEMINI_API_KEY in Constants.kt or click ENTER GEMINI API KEY."
             apiError = error
             throw IllegalStateException(error)
         }
 
-        val modelsToTry = listOf("gemini-3.1-flash-lite", "gemini-1.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-flash")
+        val modelsToTry = listOf("gemini-2.5-flash-lite", "gemini-1.5-flash", "gemini-1.5-flash-lite")
         val request = GeminiRequest(
             contents = listOf(
                 GeminiContent(
@@ -87,13 +89,19 @@ private data class AuthConfig(val name: String, val urlTemplate: String, val use
             )
         )
 
-        var errorsSummary = mutableListOf<String>()
+        val errorsSummary = mutableListOf<String>()
 
-        val authConfigs = listOf(
-            AuthConfig("query_key", "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key=$cleanKey", useBearer = false),
-            AuthConfig("query_token", "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?access_token=$cleanKey", useBearer = false),
-            AuthConfig("header_bearer", "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", useBearer = true)
+        // Build auth configs for each non-blank key
+        val keys = listOfNotNull(
+            apiKey.trim().takeIf { it.isNotBlank() },
+            apiKey2.trim().takeIf { it.isNotBlank() }
         )
+        val authConfigs = keys.flatMap { k ->
+            listOf(
+                AuthConfig("query_key", k, "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key=$k", useBearer = false),
+                AuthConfig("header_bearer", k, "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", useBearer = true)
+            )
+        }
 
         for (model in modelsToTry) {
             for (auth in authConfigs) {
@@ -106,7 +114,7 @@ private data class AuthConfig(val name: String, val urlTemplate: String, val use
                         val response = client.post(url) {
                             contentType(ContentType.Application.Json)
                             if (auth.useBearer) {
-                                header("Authorization", "Bearer $cleanKey")
+                                header("Authorization", "Bearer ${auth.key}")
                             }
                             setBody(request)
                         }

@@ -27,83 +27,89 @@ class InventoryService(
         }
     }
 
-    suspend fun getInventory(): List<FlashItem> {
-        val targetPath = "v3/merchants/$merchantId/items"
-        val urlsToTry = listOf(
-            "/api/clover/$targetPath?access_token=$apiToken",
-            "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken",
-            "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
-        )
+    private val baseUrl = "https://apisandbox.dev.clover.com"
 
-        for (url in urlsToTry) {
+    private suspend fun cloverGet(path: String): String? {
+        // 1. Try direct request with Bearer header (works on local dev server and server-side)
+        val urls = listOf(
+            baseUrl to path,
+            "https://corsproxy.io" to "/?$baseUrl$path"
+        )
+        for ((base, p) in urls) {
             try {
-                val response = client.get(url)
+                val response = client.get("$base$p") {
+                    header(HttpHeaders.Authorization, "Bearer $apiToken")
+                    header(HttpHeaders.Accept, "application/json")
+                }
                 if (response.status == HttpStatusCode.OK) {
-                    val rawBody = response.bodyAsText()
-                    if (rawBody.trim().startsWith("{")) {
-                        val itemResponse: CloverItemResponse = jsonDecoder.decodeFromString(rawBody)
-                        val items = itemResponse.elements.map {
-                            FlashItem(
-                                id = it.id ?: "",
-                                name = it.name ?: "Unknown Item",
-                                price = it.price ?: 0L
-                            )
-                        }
-                        if (items.isNotEmpty()) {
-                            println("Successfully loaded ${items.size} items from $url")
-                            return items
-                        }
-                    }
+                    val body = response.bodyAsText()
+                    if (body.trimStart().startsWith("{")) return body
                 }
             } catch (t: Throwable) {
-                println("Clover API ($url) error: ${t.message}")
+                println("Clover GET $base$p: ${t.message}")
+            }
+        }
+        return null
+    }
+
+    suspend fun getInventory(): List<FlashItem> {
+        val path = "/v3/merchants/$merchantId/items"
+        val body = cloverGet(path)
+
+        if (body != null) {
+            return try {
+                val itemResponse: CloverItemResponse = jsonDecoder.decodeFromString(body)
+                itemResponse.elements.map {
+                    FlashItem(
+                        id = it.id ?: "",
+                        name = it.name ?: "Unknown Item",
+                        price = it.price ?: 0L
+                    )
+                }.also { println("Loaded ${it.size} items from Clover API") }
+            } catch (t: Throwable) {
+                println("Parse error: ${t.message}")
+                getDemoItems()
             }
         }
 
-        println("Clover API unreachable. Serving store inventory.")
+        println("Clover API unreachable. Serving demo inventory.")
         return getDemoItems()
     }
 
     suspend fun addItem(name: String, priceCents: Long): Boolean {
-        val targetPath = "v3/merchants/$merchantId/items"
         val request = com.example.helloworld.models.CloverAddItemRequest(name, priceCents)
-        val urlsToTry = listOf(
-            "/api/clover/$targetPath?access_token=$apiToken",
-            "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
+        val urls = listOf(
+            "$baseUrl/v3/merchants/$merchantId/items",
+            "https://corsproxy.io/?$baseUrl/v3/merchants/$merchantId/items"
         )
-
-        for (url in urlsToTry) {
+        for (url in urls) {
             try {
                 val response = client.post(url) {
+                    header(HttpHeaders.Authorization, "Bearer $apiToken")
                     contentType(ContentType.Application.Json)
                     setBody(request)
                 }
-
-                if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.Created) {
-                    return true
-                }
+                if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.Created) return true
             } catch (t: Throwable) {
-                println("AddItem Exception for $url: ${t.message}")
+                println("AddItem $url: ${t.message}")
             }
         }
         return false
     }
 
     suspend fun deleteItem(itemId: String): Boolean {
-        val targetPath = "v3/merchants/$merchantId/items/$itemId"
-        val urlsToTry = listOf(
-            "/api/clover/$targetPath?access_token=$apiToken",
-            "https://apisandbox.dev.clover.com/$targetPath?access_token=$apiToken"
+        val urls = listOf(
+            "$baseUrl/v3/merchants/$merchantId/items/$itemId",
+            "https://corsproxy.io/?$baseUrl/v3/merchants/$merchantId/items/$itemId"
         )
-
-        for (url in urlsToTry) {
+        for (url in urls) {
             try {
-                val response = client.delete(url)
-                if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.NoContent) {
-                    return true
+                val response = client.delete(url) {
+                    header(HttpHeaders.Authorization, "Bearer $apiToken")
                 }
+                if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.NoContent) return true
             } catch (t: Throwable) {
-                println("DeleteItem Exception for $url: ${t.message}")
+                println("DeleteItem $url: ${t.message}")
             }
         }
         return false
