@@ -73,19 +73,26 @@ fun App(aiService: AIService? = null) {
 
             fun loadInventory() {
                 scope.launch {
-                    isLoading = true
-                    items = inventoryService.getInventory()
-                    isLoading = false
+                    try {
+                        isLoading = true
+                        items = inventoryService.getInventory()
+                    } catch (t: Throwable) {
+                        println("Inventory loading error: ${t.message}")
+                    } finally {
+                        isLoading = false
+                    }
 
-                    if (resolvedAiService.isAiReady) {
-                        insights = resolvedAiService.getMerchantInsights(items)
-                        
-                        // Generate descriptions for all items in memory with rate limit pacing
-                        items.forEach { item ->
-                            if (!itemDescriptions.containsKey(item.id)) {
-                                itemDescriptions[item.id] = resolvedAiService.generateDescription(item.name, item.id)
-                                delay(400)
+                    if (resolvedAiService.isAiReady && items.isNotEmpty()) {
+                        try {
+                            insights = resolvedAiService.getMerchantInsights(items)
+                            items.forEach { item ->
+                                if (!itemDescriptions.containsKey(item.id)) {
+                                    itemDescriptions[item.id] = resolvedAiService.generateDescription(item.name, item.id)
+                                    delay(400)
+                                }
                             }
+                        } catch (t: Throwable) {
+                            println("AI Insights background error: ${t.message}")
                         }
                     }
                 }

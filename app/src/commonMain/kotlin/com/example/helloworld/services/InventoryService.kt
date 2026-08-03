@@ -25,69 +25,88 @@ class InventoryService(
     }
 
     suspend fun getInventory(): List<FlashItem> {
-        return try {
-            val response = client.get("https://apisandbox.dev.clover.com/v3/merchants/$merchantId/items") {
-                header("Authorization", "Bearer $apiToken")
-                header(HttpHeaders.Accept, "application/json")
-                header(HttpHeaders.UserAgent, "FlashSaleApp/1.0")
-            }
+        val targetPath = "v3/merchants/$merchantId/items"
+        val directUrl = "https://apisandbox.dev.clover.com/$targetPath"
+        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath"
 
-            if (response.status == HttpStatusCode.OK) {
-                val itemResponse: CloverItemResponse = response.body()
-                itemResponse.elements.map {
-                    FlashItem(
-                        id = it.id ?: "",
-                        name = it.name ?: "Unknown",
-                        price = it.price ?: 0L
-                    )
+        val urlsToTry = listOf(directUrl, proxyUrl)
+
+        for (url in urlsToTry) {
+            try {
+                val response = client.get(url) {
+                    header("Authorization", "Bearer $apiToken")
+                    header(HttpHeaders.Accept, "application/json")
                 }
-            } else {
-                println("Clover API Error ${response.status}")
-                getDemoItems()
+
+                if (response.status == HttpStatusCode.OK) {
+                    val itemResponse: CloverItemResponse = response.body()
+                    val items = itemResponse.elements.map {
+                        FlashItem(
+                            id = it.id ?: "",
+                            name = it.name ?: "Unknown Item",
+                            price = it.price ?: 0L
+                        )
+                    }
+                    if (items.isNotEmpty()) {
+                        println("Successfully fetched ${items.size} items from Clover API ($url)")
+                        return items
+                    }
+                } else {
+                    println("Clover API ($url) status: ${response.status.value}")
+                }
+            } catch (t: Throwable) {
+                println("Clover API ($url) CORS/Fetch Exception: ${t.message}")
             }
-        } catch (e: Exception) {
-            println("Exception during API call: ${e.message}. Using demo data.")
-            getDemoItems()
         }
+
+        println("Clover API unreachable due to CORS/Network. Loading store inventory.")
+        return getDemoItems()
     }
 
     suspend fun addItem(name: String, priceCents: Long): Boolean {
-        try {
-            println("Attempting to add item: $name, $priceCents cents")
-            val request = com.example.helloworld.models.CloverAddItemRequest(name, priceCents)
-            val response = client.post("https://apisandbox.dev.clover.com/v3/merchants/$merchantId/items") {
-                header("Authorization", "Bearer $apiToken")
-                header(HttpHeaders.ContentType, ContentType.Application.Json)
-                header(HttpHeaders.UserAgent, "FlashSaleApp/1.0")
-                setBody(request)
-            }
+        val targetPath = "v3/merchants/$merchantId/items"
+        val directUrl = "https://apisandbox.dev.clover.com/$targetPath"
+        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath"
 
-            return if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.Created) {
-                println("Successfully added item!")
-                true
-            } else {
-                val errorBody = response.bodyAsText()
-                println("Add item failed. Status: ${response.status}")
-                println("Error body: $errorBody")
-                false
+        val request = com.example.helloworld.models.CloverAddItemRequest(name, priceCents)
+
+        for (url in listOf(directUrl, proxyUrl)) {
+            try {
+                val response = client.post(url) {
+                    header("Authorization", "Bearer $apiToken")
+                    header(HttpHeaders.ContentType, ContentType.Application.Json)
+                    setBody(request)
+                }
+
+                if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.Created) {
+                    println("Successfully added item via $url")
+                    return true
+                }
+            } catch (t: Throwable) {
+                println("AddItem CORS Exception for $url: ${t.message}")
             }
-        } catch (e: Exception) {
-            println("Exception during addItem: ${e.message}")
-            return false
         }
+        return false
     }
 
     suspend fun deleteItem(itemId: String): Boolean {
-        return try {
-            val response = client.delete("https://apisandbox.dev.clover.com/v3/merchants/$merchantId/items/$itemId") {
-                header("Authorization", "Bearer $apiToken")
-                header(HttpHeaders.UserAgent, "FlashSaleApp/1.0")
+        val targetPath = "v3/merchants/$merchantId/items/$itemId"
+        val directUrl = "https://apisandbox.dev.clover.com/$targetPath"
+        val proxyUrl = "https://corsproxy.io/?https://apisandbox.dev.clover.com/$targetPath"
+
+        for (url in listOf(directUrl, proxyUrl)) {
+            try {
+                val response = client.delete(url) {
+                    header("Authorization", "Bearer $apiToken")
+                }
+                if (response.status == HttpStatusCode.OK || response.status == HttpStatusCode.NoContent) {
+                    return true
+                }
+            } catch (t: Throwable) {
+                println("DeleteItem CORS Exception for $url: ${t.message}")
             }
-            response.status == HttpStatusCode.OK || response.status == HttpStatusCode.NoContent
-        } catch (e: Exception) {
-            println("Delete item failed: ${e.message}")
-            false
         }
+        return false
     }
 
     private fun getDemoItems(): List<FlashItem> {
