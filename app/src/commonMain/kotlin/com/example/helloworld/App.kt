@@ -69,8 +69,6 @@ fun App(aiService: AIService? = null) {
             var selectedItemForSale by remember { mutableStateOf<FlashItem?>(null) }
             val itemDescriptions = remember { mutableStateMapOf<String, String>() }
 
-            var showApiKeyDialog by remember { mutableStateOf(!resolvedAiService.isAiReady) }
-
             fun loadInventory() {
                 scope.launch {
                     try {
@@ -82,7 +80,7 @@ fun App(aiService: AIService? = null) {
                         isLoading = false
                     }
 
-                    if (resolvedAiService.isAiReady && items.isNotEmpty()) {
+                    if (items.isNotEmpty()) {
                         try {
                             insights = resolvedAiService.getMerchantInsights(items)
                             items.forEach { item ->
@@ -113,38 +111,17 @@ fun App(aiService: AIService? = null) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("Merchant Inventory Portal", style = MaterialTheme.typography.caption, color = Color.Gray)
                                     Spacer(Modifier.width(12.dp))
-                                    if (resolvedAiService.isAiReady) {
-                                        Surface(
-                                            color = Color(0xFF007A33).copy(alpha = 0.15f),
-                                            shape = RoundedCornerShape(4.dp)
-                                        ) {
-                                            Text(
-                                                "GEMINI 3.1 FLASH LITE", 
-                                                color = Color(0xFF007A33), 
-                                                fontSize = 9.sp, 
-                                                fontWeight = FontWeight.Black, 
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Surface(
-                                            color = Color(0xFFB00020).copy(alpha = 0.15f),
-                                            shape = RoundedCornerShape(4.dp),
-                                            modifier = Modifier.padding(vertical = 2.dp)
-                                        ) {
-                                            TextButton(
-                                                onClick = { showApiKeyDialog = true },
-                                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                                modifier = Modifier.height(20.dp)
-                                            ) {
-                                                Text(
-                                                    "ENTER GEMINI API KEY", 
-                                                    color = Color(0xFFB00020), 
-                                                    fontSize = 9.sp, 
-                                                    fontWeight = FontWeight.Black
-                                                )
-                                            }
-                                        }
+                                    Surface(
+                                        color = Color(0xFF007A33).copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            "GEMINI 2.5 FLASH ACTIVE", 
+                                            color = Color(0xFF007A33), 
+                                            fontSize = 9.sp, 
+                                            fontWeight = FontWeight.Black,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
                                     }
                                 }
                             }
@@ -181,50 +158,6 @@ fun App(aiService: AIService? = null) {
                         .padding(padding),
                     contentAlignment = Alignment.TopCenter
                 ) {
-                    if (showApiKeyDialog || !resolvedAiService.isAiReady) {
-                        var keyInput by remember { mutableStateOf("") }
-                        AlertDialog(
-                            onDismissRequest = { if (resolvedAiService.isAiReady) showApiKeyDialog = false },
-                            title = { Text("Enter Google Gemini API Key", fontWeight = FontWeight.Bold) },
-                            text = {
-                                Column(modifier = Modifier.width(320.dp)) {
-                                    Text(
-                                        "Please provide your Google Gemini API key from Google AI Studio to generate AI merchant recommendations and product descriptions:",
-                                        style = MaterialTheme.typography.body2
-                                    )
-                                    Spacer(Modifier.height(14.dp))
-                                    OutlinedTextField(
-                                        value = keyInput,
-                                        onValueChange = { keyInput = it },
-                                        label = { Text("Gemini API Key (AIzaSy...)") },
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                            },
-                            confirmButton = {
-                                Button(
-                                    onClick = {
-                                        if (keyInput.isNotBlank()) {
-                                            resolvedAiService.updateApiKey(keyInput.trim())
-                                            showApiKeyDialog = false
-                                            loadInventory()
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF007A33), contentColor = Color.White)
-                                ) {
-                                    Text("SAVE & INITIALIZE")
-                                }
-                            },
-                            dismissButton = {
-                                if (resolvedAiService.isAiReady) {
-                                    TextButton(onClick = { showApiKeyDialog = false }) {
-                                        Text("CANCEL")
-                                    }
-                                }
-                            }
-                        )
-                    }
                     if (isLoading && items.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(color = MaterialTheme.colors.primary)

@@ -30,14 +30,17 @@ class InventoryService(
     private val baseUrl = "https://apisandbox.dev.clover.com"
 
     private suspend fun cloverGet(path: String): String? {
-        // 1. Try direct request with Bearer header (works on local dev server and server-side)
         val urls = listOf(
+            "/api/clover" to path,
+            "https://api.allorigins.win/raw?url=" to "https://apisandbox.dev.clover.com$path",
             baseUrl to path,
-            "https://corsproxy.io" to "/?$baseUrl$path"
+            "https://corsproxy.io/?" to "$baseUrl$path"
         )
         for ((base, p) in urls) {
             try {
-                val response = client.get("$base$p") {
+                val fullUrl = if (base.startsWith("/")) "$p" else if (base.contains("url=")) "$base$p" else "$base$p"
+                val targetUrl = if (base == "/api/clover") "/api/clover$path" else fullUrl
+                val response = client.get(targetUrl) {
                     header(HttpHeaders.Authorization, "Bearer $apiToken")
                     header(HttpHeaders.Accept, "application/json")
                 }
@@ -78,9 +81,11 @@ class InventoryService(
 
     suspend fun addItem(name: String, priceCents: Long): Boolean {
         val request = com.example.helloworld.models.CloverAddItemRequest(name, priceCents)
+        val path = "/v3/merchants/$merchantId/items"
         val urls = listOf(
-            "$baseUrl/v3/merchants/$merchantId/items",
-            "https://corsproxy.io/?$baseUrl/v3/merchants/$merchantId/items"
+            "/api/clover$path",
+            "$baseUrl$path",
+            "https://corsproxy.io/?$baseUrl$path"
         )
         for (url in urls) {
             try {
@@ -98,9 +103,11 @@ class InventoryService(
     }
 
     suspend fun deleteItem(itemId: String): Boolean {
+        val path = "/v3/merchants/$merchantId/items/$itemId"
         val urls = listOf(
-            "$baseUrl/v3/merchants/$merchantId/items/$itemId",
-            "https://corsproxy.io/?$baseUrl/v3/merchants/$merchantId/items/$itemId"
+            "/api/clover$path",
+            "$baseUrl$path",
+            "https://corsproxy.io/?$baseUrl$path"
         )
         for (url in urls) {
             try {

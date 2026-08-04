@@ -79,7 +79,7 @@ private data class AuthConfig(val name: String, val key: String, val urlTemplate
             throw IllegalStateException(error)
         }
 
-        val modelsToTry = listOf("gemini-2.5-flash-lite", "gemini-1.5-flash", "gemini-1.5-flash-lite")
+        val modelsToTry = listOf("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash")
         val request = GeminiRequest(
             contents = listOf(
                 GeminiContent(
