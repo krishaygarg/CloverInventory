@@ -12,6 +12,7 @@ object Constants {
     private const val _k1 = "QVEuQWI4Uk42SjFaSWhqWGFQUC01MW1SY01lanJjYWlJNVVZWk1FWkVvbVd5a1BIRUNsaGc="
     val GEMINI_API_KEY: String get() = Base64.decode(_k1).decodeToString()
 
-    // Fallback Gemini API key (set second key here if available)
-    const val GEMINI_API_KEY_2: String = ""
+    // Fallback Gemini API key
+    private const val _k2 = "QUl6YVN5QVN4YTgzeVRjWXdhUWpSdGdTRThxY2MxVTFtV2pKT0Vn"
+    val GEMINI_API_KEY_2: String get() = Base64.decode(_k2).decodeToString()
 }

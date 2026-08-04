@@ -79,7 +79,7 @@ private data class AuthConfig(val name: String, val key: String, val urlTemplate
             throw IllegalStateException(error)
         }
 
-        val modelsToTry = listOf("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-lite")
+        val modelsToTry = listOf("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash")
         val request = GeminiRequest(
             contents = listOf(
                 GeminiContent(
@@ -120,10 +120,9 @@ private data class AuthConfig(val name: String, val key: String, val urlTemplate
                         }
                     } else if (response.status == HttpStatusCode.TooManyRequests || response.status.value == 429) {
                         val errBody = response.bodyAsText()
-                        println("Gemini ($model) 429 Rate Limit. Trying next available model.")
-                        errorsSummary.add("Gemini ($model) 429 Rate Limit: $errBody")
-                        // Move to next model immediately
-                        break
+                        println("Gemini ($model via key ${auth.key.take(6)}...) 429 Rate Limit. Trying next key/model.")
+                        errorsSummary.add("Gemini ($model) 429 Rate Limit")
+                        continue
                     } else {
                         val errBody = response.bodyAsText()
                         val httpErr = "Gemini ($model) HTTP ${response.status.value}: $errBody"
