@@ -31,15 +31,12 @@ class InventoryService(
 
     private suspend fun cloverGet(path: String): String? {
         val urls = listOf(
-            "/api/clover" to path,
-            "https://api.allorigins.win/raw?url=" to "https://apisandbox.dev.clover.com$path",
-            baseUrl to path,
-            "https://corsproxy.io/?" to "$baseUrl$path"
+            "/api/clover$path",
+            "$baseUrl$path",
+            "https://corsproxy.io/?$baseUrl$path"
         )
-        for ((base, p) in urls) {
+        for (targetUrl in urls) {
             try {
-                val fullUrl = if (base.startsWith("/")) "$p" else if (base.contains("url=")) "$base$p" else "$base$p"
-                val targetUrl = if (base == "/api/clover") "/api/clover$path" else fullUrl
                 val response = client.get(targetUrl) {
                     header(HttpHeaders.Authorization, "Bearer $apiToken")
                     header(HttpHeaders.Accept, "application/json")
@@ -49,7 +46,7 @@ class InventoryService(
                     if (body.trimStart().startsWith("{")) return body
                 }
             } catch (t: Throwable) {
-                println("Clover GET $base$p: ${t.message}")
+                println("Clover GET $targetUrl: ${t.message}")
             }
         }
         return null
