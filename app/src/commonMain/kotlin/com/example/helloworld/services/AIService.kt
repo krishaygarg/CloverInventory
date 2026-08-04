@@ -143,8 +143,11 @@ private data class AuthConfig(val name: String, val key: String, val urlTemplate
         throw IllegalStateException(finalError)
     }
 
+    private val merchantInsightsCache = mutableListOf<AIInsight>()
+
     suspend fun getMerchantInsights(items: List<FlashItem>): List<AIInsight> {
         if (items.isEmpty()) return emptyList()
+        if (merchantInsightsCache.isNotEmpty()) return merchantInsightsCache
 
         val itemsSummary = items.joinToString("\n") { "- ID: ${it.id}, Name: ${it.name}, Price: $${formatPriceHelper(it.price)}" }
         val prompt = """
@@ -202,7 +205,7 @@ private data class AuthConfig(val name: String, val key: String, val urlTemplate
                 .trim()
 
             val rawInsights: List<GeminiInsightJson> = json.decodeFromString(cleanJson)
-            rawInsights.map { raw ->
+            val result = rawInsights.map { raw ->
                 val type = when (raw.type.uppercase()) {
                     "COMBO" -> InsightType.COMBO
                     "TRENDING" -> InsightType.TRENDING
@@ -232,9 +235,17 @@ private data class AuthConfig(val name: String, val key: String, val urlTemplate
                     suggestedCombo = combo
                 )
             }
+            merchantInsightsCache.clear()
+            merchantInsightsCache.addAll(result)
+            result
         } catch (e: Exception) {
             println("Gemini API Merchant Insights Failed: ${e.message}")
-            apiError = e.message
+            val msg = e.message ?: "Gemini API error"
+            apiError = if (msg.contains("429") || msg.contains("Quota")) {
+                "Gemini Free Tier Daily Quota Exceeded (429 Too Many Requests). Please retry later."
+            } else {
+                msg
+            }
             emptyList()
         }
     }
@@ -250,7 +261,12 @@ private data class AuthConfig(val name: String, val key: String, val urlTemplate
             cleanDesc
         } catch (e: Exception) {
             println("Gemini API Description Failed for $itemName: ${e.message}")
-            val errText = "Gemini Error: ${e.message}"
+            val msg = e.message ?: ""
+            val errText = if (msg.contains("429") || msg.contains("Quota")) {
+                "Description pending (API Quota Limit)"
+            } else {
+                "Description unavailable"
+            }
             descriptionCache[itemId] = errText
             errText
         }
