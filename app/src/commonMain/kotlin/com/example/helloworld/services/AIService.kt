@@ -79,7 +79,7 @@ private data class AuthConfig(val name: String, val key: String, val urlTemplate
             throw IllegalStateException(error)
         }
 
-        val modelsToTry = listOf("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash")
+        val modelsToTry = listOf("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-lite")
         val request = GeminiRequest(
             contents = listOf(
                 GeminiContent(
@@ -91,68 +91,49 @@ private data class AuthConfig(val name: String, val key: String, val urlTemplate
 
         val errorsSummary = mutableListOf<String>()
 
-        // Build auth configs for each non-blank key
+        // Build auth configs for each non-blank key using query param only (Google API keys require ?key=...)
         val keys = listOfNotNull(
             apiKey.trim().takeIf { it.isNotBlank() },
             apiKey2.trim().takeIf { it.isNotBlank() }
         )
-        val authConfigs = keys.flatMap { k ->
-            listOf(
-                AuthConfig("query_key", k, "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key=$k", useBearer = false),
-                AuthConfig("header_bearer", k, "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", useBearer = true)
-            )
+        val authConfigs = keys.map { k ->
+            AuthConfig("query_key", k, "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key=$k", useBearer = false)
         }
 
         for (model in modelsToTry) {
             for (auth in authConfigs) {
                 val url = auth.urlTemplate.replace("{model}", model)
-                var retryCount = 0
-                val maxRetries = 1
-
-                while (retryCount <= maxRetries) {
-                    try {
-                        val response = client.post(url) {
-                            contentType(ContentType.Application.Json)
-                            if (auth.useBearer) {
-                                header("Authorization", "Bearer ${auth.key}")
-                            }
-                            setBody(request)
-                        }
-
-                        if (response.status == HttpStatusCode.OK) {
-                            val geminiResponse: GeminiResponse = response.body()
-                            val text = geminiResponse.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text
-                            if (!text.isNullOrBlank()) {
-                                apiError = null
-                                return text
-                            } else {
-                                errorsSummary.add("Gemini ($model) empty candidate text.")
-                                break
-                            }
-                        } else if (response.status == HttpStatusCode.TooManyRequests || response.status.value == 429) {
-                            val errBody = response.bodyAsText()
-                            val delaySeconds = extractRetryDelaySeconds(errBody) ?: (3 * (1 shl retryCount))
-                            if (retryCount < maxRetries) {
-                                retryCount++
-                                delay(delaySeconds * 1000L)
-                                continue
-                            } else {
-                                errorsSummary.add("Gemini ($model) 429 Rate Limit: $errBody")
-                                break
-                            }
-                        } else {
-                            val errBody = response.bodyAsText()
-                            val httpErr = "Gemini ($model via ${auth.name}) HTTP ${response.status.value}: $errBody"
-                            println(httpErr)
-                            errorsSummary.add(httpErr)
-                            break
-                        }
-                    } catch (e: Exception) {
-                        val excErr = "Gemini ($model via ${auth.name}) Error: ${e.message}"
-                        println(excErr)
-                        errorsSummary.add(excErr)
-                        break
+                try {
+                    val response = client.post(url) {
+                        contentType(ContentType.Application.Json)
+                        setBody(request)
                     }
+
+                    if (response.status == HttpStatusCode.OK) {
+                        val geminiResponse: GeminiResponse = response.body()
+                        val text = geminiResponse.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                        if (!text.isNullOrBlank()) {
+                            apiError = null
+                            return text
+                        } else {
+                            errorsSummary.add("Gemini ($model) empty candidate text.")
+                        }
+                    } else if (response.status == HttpStatusCode.TooManyRequests || response.status.value == 429) {
+                        val errBody = response.bodyAsText()
+                        println("Gemini ($model) 429 Rate Limit. Trying next available model.")
+                        errorsSummary.add("Gemini ($model) 429 Rate Limit: $errBody")
+                        // Move to next model immediately
+                        break
+                    } else {
+                        val errBody = response.bodyAsText()
+                        val httpErr = "Gemini ($model) HTTP ${response.status.value}: $errBody"
+                        println(httpErr)
+                        errorsSummary.add(httpErr)
+                    }
+                } catch (e: Exception) {
+                    val excErr = "Gemini ($model) Error: ${e.message}"
+                    println(excErr)
+                    errorsSummary.add(excErr)
                 }
             }
         }

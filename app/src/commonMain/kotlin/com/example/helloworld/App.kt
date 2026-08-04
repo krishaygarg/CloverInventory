@@ -86,7 +86,7 @@ fun App(aiService: AIService? = null) {
                             items.forEach { item ->
                                 if (!itemDescriptions.containsKey(item.id)) {
                                     itemDescriptions[item.id] = resolvedAiService.generateDescription(item.name, item.id)
-                                    delay(400)
+                                    delay(1200)
                                 }
                             }
                         } catch (t: Throwable) {
